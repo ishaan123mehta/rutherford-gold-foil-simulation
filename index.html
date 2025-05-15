@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title></title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f5f5dc;
+      text-align: center;
+      margin: 0;
+      padding: 0;
+    }
+
+    h1 {
+      margin: 20px;
+      color: #333;
+    }
+
+    .controls {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+
+    label {
+      font-size: 14px;
+      color: #333;
+    }
+
+    input[type="range"] {
+      width: 200px;
+      appearance: none;
+      height: 6px;
+      background: #ccc;
+      border-radius: 3px;
+      outline: none;
+      margin-left: 10px;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #444;
+      cursor: pointer;
+    }
+
+    canvas {
+      border: 1px solid #888;
+      background-color: #fffaf0;
+      display: block;
+      margin: auto;
+      box-shadow: 0px 0px 8px rgba(0,0,0,0.2);
+    }
+  </style>
+</head>
+<body>
+  <h1></h1>
+
+  <div class="controls">
+    <label>
+      Simulation Speed
+      <input type="range" id="speed" min="0.1" max="2" step="0.1" value="1"/>
+      <span id="speedVal">1x</span>
+    </label>
+  </div>
+
+  <canvas id="simCanvas" width="1000" height="600"></canvas>
+
+  <script>
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
+    const speedSlider = document.getElementById('speed');
+    const speedVal = document.getElementById('speedVal');
+
+    let simSpeed = +speedSlider.value;
+    speedSlider.oninput = () => {
+      simSpeed = +speedSlider.value;
+      speedVal.textContent = simSpeed.toFixed(1) + 'x';
+    };
+
+    const goldAtoms = [];
+    const particles = [];
+
+    const cols = 10;
+    const rows = 6;
+    const spacingX = canvas.width / (cols + 1);
+    const spacingY = canvas.height / (rows + 1);
+    const nucleusRadius = 5;
+    const alphaSpeed = 10 * 0.5; // internally uses fixed energy
+
+    for (let i = 1; i <= cols; i++) {
+      for (let j = 1; j <= rows; j++) {
+        goldAtoms.push({
+          x: i * spacingX,
+          y: j * spacingY,
+          atomRadius: 20,
+          nucleusRadius: nucleusRadius
+        });
+      }
+    }
+
+    let spawnAccumulator = 0;
+    const PARTICLES_PER_SECOND = 30;
+
+    function spawnParticles(deltaTime) {
+      spawnAccumulator += PARTICLES_PER_SECOND * simSpeed * (deltaTime / 1000);
+      while (spawnAccumulator >= 1) {
+        spawnAccumulator--;
+        const angle = (Math.random() - 0.5) * 0.05;
+        particles.push({
+          x: 0,
+          y: Math.random() * canvas.height,
+          vx: Math.cos(angle) * alphaSpeed,
+          vy: Math.sin(angle) * alphaSpeed,
+          color: 'red'
+        });
+      }
+    }
+
+    function applyNucleusDeflection(p, nucleus) {
+      const dx = nucleus.x - p.x;
+      const dy = nucleus.y - p.y;
+      const distSq = dx * dx + dy * dy;
+      const distance = Math.sqrt(distSq);
+
+      if (distance < nucleus.nucleusRadius * 2) {
+        const force = 6000 / distSq;
+        const angle = Math.atan2(dy, dx);
+        const fx = -Math.cos(angle) * force;
+        const fy = -Math.sin(angle) * force;
+
+        p.vx += fx * 0.1;
+        p.vy += fy * 0.1;
+
+        const deflect = Math.abs(fy);
+        if (deflect > 3) p.color = 'blue';
+        else if (deflect > 1) p.color = 'orange';
+        else p.color = 'red';
+      }
+    }
+
+    function updateParticles(deltaTime) {
+      for (let p of particles) {
+        for (let nucleus of goldAtoms) {
+          applyNucleusDeflection(p, nucleus);
+        }
+
+        p.x += p.vx * simSpeed * (deltaTime / 16.67);
+        p.y += p.vy * simSpeed * (deltaTime / 16.67);
+      }
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        if (p.x < -10 || p.x > canvas.width + 10 || p.y < -10 || p.y > canvas.height + 10) {
+          particles.splice(i, 1);
+        }
+      }
+    }
+
+    function drawScene() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (let atom of goldAtoms) {
+        ctx.beginPath();
+        ctx.arc(atom.x, atom.y, atom.atomRadius, 0, 2 * Math.PI);
+        ctx.fillStyle = 'gold';
+        ctx.fill();
+        ctx.strokeStyle = '#888';
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(atom.x, atom.y, atom.nucleusRadius, 0, 2 * Math.PI);
+        ctx.fillStyle = 'deeppink';
+        ctx.fill();
+      }
+
+      for (let p of particles) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3, 0, 2 * Math.PI);
+        ctx.fillStyle = p.color;
+        ctx.fill();
+      }
+    }
+
+    let lastTime = performance.now();
+
+    function animate() {
+      const now = performance.now();
+      const deltaTime = now - lastTime;
+      lastTime = now;
+
+      spawnParticles(deltaTime);
+      updateParticles(deltaTime);
+      drawScene();
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
